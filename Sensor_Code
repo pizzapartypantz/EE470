@@ -1,0 +1,45 @@
+#include <Arduino.h>
+
+const float R1 = 9980.0;
+const float R2 = 9980.0;
+
+const float ADC_MAX = 1023.0;
+const float ADC_FULL_SCALE = 3.081;
+
+unsigned long sampleNumber = 0;
+unsigned long startTime;
+
+void setup() {
+    Serial.begin(115200);
+    startTime = millis();
+
+    Serial.println("Sample,Elapsed_min,ADC,BatteryVoltage_V");
+}
+
+void loop() {
+    int adc = analogRead(A0);
+
+    float a0Voltage =
+        (adc / ADC_MAX) * ADC_FULL_SCALE;
+
+    float batteryVoltage =
+        a0Voltage * ((R1 + R2) / R2);
+
+    float elapsedMinutes =
+        (millis() - startTime) / 60000.0;
+
+    Serial.print(sampleNumber);
+    Serial.print(",");
+
+    Serial.print(elapsedMinutes, 2);
+    Serial.print(",");
+
+    Serial.print(adc);
+    Serial.print(",");
+
+    Serial.println(batteryVoltage, 3);
+
+    sampleNumber++;
+
+    delay(60000);
+}
