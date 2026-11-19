@@ -1,0 +1,296 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+
+  <title>EE470 MQTT Monitoring Dashboard</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f3f5f9;
+      color: #202938;
+      margin: 0;
+      padding: 25px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: auto;
+    }
+
+    h1 {
+      color: #163b67;
+      margin-bottom: 5px;
+    }
+
+    .subtitle {
+      color: #657184;
+      margin-bottom: 25px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns:
+        repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .card, .chart-box {
+      background: white;
+      padding: 22px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .card h3 {
+      font-size: 14px;
+      color: #68778b;
+      margin: 0 0 12px;
+    }
+
+    .value {
+      font-size: 30px;
+      font-weight: bold;
+      color: #164e87;
+    }
+
+    .chart-container {
+      height: 420px;
+      position: relative;
+    }
+
+    .footer {
+      text-align: center;
+      margin-top: 25px;
+      font-size: 13px;
+      color: #667;
+    }
+
+    #status {
+      font-weight: bold;
+    }
+
+    @media (max-width: 600px) {
+      .chart-container {
+        height: 320px;
+      }
+      body {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <h1>EE470 MQTT Monitoring Dashboard</h1>
+
+  <p class="subtitle">
+    ESP8266 | HiveMQ | Python Relay | Hostinger
+  </p>
+
+  <div class="stats">
+
+    <div class="card">
+      <h3>Latest Potentiometer Reading</h3>
+      <div class="value" id="latestValue">--</div>
+    </div>
+
+    <div class="card">
+      <h3>Readings Loaded</h3>
+      <div class="value" id="totalReadings">0</div>
+    </div>
+
+    <div class="card">
+      <h3>Database Status</h3>
+      <div class="value" id="status"
+           style="font-size:20px;">
+        Loading...
+      </div>
+    </div>
+
+  </div>
+
+  <div class="chart-box">
+    <h2>Potentiometer ADC Readings</h2>
+
+    <div class="chart-container">
+      <canvas id="mqttChart"></canvas>
+    </div>
+
+    <p id="lastTimestamp">
+      Latest stored timestamp: --
+    </p>
+    <p id="lastRefresh">
+      Last page refresh: --
+    </p>
+  </div>
+
+  <div class="footer">
+    EE470 - Introduction to the Internet of Things
+    <p>MQTT Data Monitoring System</p>
+  </div>
+
+</div>
+
+<script>
+  const ctx = document.getElementById("mqttChart");
+
+  const mqttChart = new Chart(ctx, {
+    type: "line",
+
+    data: {
+      labels: [],
+      datasets: [{
+        label: "Potentiometer ADC Value",
+        data: [],
+        borderColor: "#2563eb",
+        backgroundColor: "rgba(37,99,235,0.10)",
+        borderWidth: 2,
+        tension: 0.2,
+        fill: true,
+        pointRadius: 3
+      }]
+    },
+
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: "Time (Pacific - PST/PDT)"
+          },
+          ticks: {
+            maxTicksLimit: 10
+          }
+        },
+
+        y: {
+          beginAtZero: true,
+          suggestedMax: 350,
+          title: {
+            display: true,
+            text: "ADC Reading"
+          }
+        }
+      }
+    }
+  });
+
+  async function updateGraph() {
+    const status = document.getElementById("status");
+
+    try {
+      const response = await fetch(
+        "mqtt_data.php?t=" + Date.now(),
+        { cache: "no-store" }
+      );
+
+      if (!response.ok) {
+        throw new Error("HTTP " + response.status);
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data)) {
+        throw new Error("Invalid data format");
+      }
+
+    
+function formatPacificTime(utcTimestamp) {
+
+  // MySQL returns "YYYY-MM-DD HH:MM:SS"
+  // Explicitly interpret this timestamp as UTC.
+  const date = new Date(
+    utcTimestamp.replace(" ", "T") + "Z"
+  );
+
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true
+  }).format(date);
+}
+
+const labels = data.map(row =>
+  formatPacificTime(row.time_received)
+);
+
+
+      const values = data.map(row =>
+        Number(row.potentiometer_value)
+      );
+
+      mqttChart.data.labels = labels;
+      mqttChart.data.datasets[0].data = values;
+      mqttChart.update();
+
+      document.getElementById(
+        "totalReadings"
+      ).textContent = data.length;
+
+      if (data.length > 0) {
+        const latest = data[data.length - 1];
+
+        document.getElementById(
+          "latestValue"
+        ).textContent =
+          latest.potentiometer_value;
+
+        
+        document.getElementById(
+  "lastTimestamp"
+).textContent =
+  "Latest stored timestamp (Pacific): " +
+  formatPacificTime(latest.time_received);
+
+      } else {
+        document.getElementById(
+          "latestValue"
+        ).textContent = "--";
+
+        document.getElementById(
+          "lastTimestamp"
+        ).textContent = "No readings available";
+      }
+
+      status.textContent = "Database Connected";
+      status.style.color = "#15803d";
+
+      document.getElementById(
+        "lastRefresh"
+      ).textContent =
+        "Last page refresh: " +
+        new Date().toLocaleTimeString();
+
+    } catch (error) {
+      console.error("Data fetch error:", error);
+
+      status.textContent = "Database Error";
+      status.style.color = "#dc2626";
+    }
+  }
+
+  updateGraph();
+
+  // Refresh every 15 seconds
+  setInterval(updateGraph, 15000);
+</script>
+
+</body>
+</html>
